@@ -1,0 +1,185 @@
+﻿
+<h1>Таблица предметов</h1>
+
+
+<h3>@keyWord</h3>
+
+<span class="display-5">Фильтрация по ключевому слову </span>
+<div class="input-group mb-3">
+    <input type="text" class="form-control" placeholder="Фильтрация по ключевому слову"
+           aria-label="Recipient's username" aria-describedby="button-addon2"
+           @bind-value="@keyWord"
+           @bind-value:event="oninput">
+    <button class="btn btn-outline-secondary" type="button" id="button-addon2" @onclick="SortByKeyWord">Сортировать</button>
+    <button class="btn btn-outline-secondary" type="button" id="button-addon3" @onclick="ResetKeyWord">Сброс</button>
+</div>
+
+
+<span class="display-5">Фильтрация по цене </span>
+
+<div class="input-group mb-3">
+    <input type="text" class="form-control" placeholder="ОТ"
+           aria-label="Recipient's username" aria-describedby="button-addon2"
+           @bind-value="@priceMin"
+           @bind-value:event="oninput">
+    <input type="text" class="form-control" placeholder="ДО"
+           aria-label="Recipient's username" aria-describedby="button-addon2"
+           @bind-value="@priceMax"
+           @bind-value:event="oninput">
+    <button class="btn btn-outline-secondary" type="button" id="button-addon2" @onclick="SortByKeyPrice">Сортировать</button>
+    <button class="btn btn-outline-secondary" type="button" id="button-addon3" @onclick="ResetPrice">Сброс</button>
+</div>
+
+<div class="input-group mb-3">
+    
+    <button class="btn btn-outline-success" type="button" id="button-addon3" @onclick="()=>Reset(true)">Полный Сброс</button>
+</div>
+
+
+
+@if (products == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table" id=>
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Description</th>
+                <th scope="col">Image</th>
+                <th scope="col"><button @onclick="SortByPrice">Price</button></th>
+                <th scope="col"><button @onclick="SortByCity">Adress</button></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var product in products)
+            {
+                <tr @onclick='()=> JSRuntime.InvokeAsync<object>("open", product.Url, "_blank")'>
+                    
+                    <td>@product.Name</td>
+                    <td>@product.Description</td>
+                    <td>
+                        <img style="max-height:
+                         100px;
+                         max-width: 100px "
+                             src="@product.ImgSource" />
+                    </td>
+                    <td>@product.Price</td>
+                    <td>@product.ItemAderess</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+
+    HubConnection hubConnection;
+    private List<Product> products;
+    private List<Product> productsBeforeSort;
+    bool sortByPrice = true;
+    bool sortByCity = true;
+    string keyWord = "";
+    string priceMax = "";
+    string priceMin = "";
+    string url = "";
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/collectionhub"))
+            .Build();
+
+
+        hubConnection.On<List<Product>>("ReceiveMessage", productsServer =>
+        {
+
+            Console.WriteLine("tut");
+            products = productsServer;
+            StateHasChanged();
+        });
+
+
+        await hubConnection.StartAsync();
+        await Send();
+        url = NavigationManager.ToAbsoluteUri("/collectionhub").AbsoluteUri;
+        //products = await Http.GetFromJsonAsync<List<Product>>("Products");
+        productsBeforeSort = products;
+        keyWord = "";
+        priceMin = "";
+        priceMax = "";
+    }
+
+
+    async Task Send() =>
+        await hubConnection.SendAsync("SendMessage", products);
+
+    public bool IsConnected =>
+        hubConnection.State == HubConnectionState.Connected;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection != null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    void SortByPrice()
+    {
+        if (sortByPrice) products = products.OrderBy(a => a.Price).ToList();
+        else products = products.OrderByDescending(a => a.Price).ToList();
+        sortByPrice = !sortByPrice;
+    }
+
+    void SortByCity()
+    {
+        if (sortByCity) products = products.OrderBy(a => a.ItemAderess).ToList();
+        else products = products.OrderByDescending(a => a.ItemAderess).ToList();
+        sortByCity = !sortByCity;
+
+    }
+
+    void SortByKeyWord()
+    {
+        if (products.Count == 0 || products == null) products = productsBeforeSort;
+        products = products.Where(a => a.Description.ToLower().Contains(keyWord.ToLower())).ToList();
+    }
+
+    void SortByKeyPrice()
+    {
+
+        if (products.Count == 0 || products == null) products = productsBeforeSort;
+
+        products = products.Where(a => a.Price > (Convert.ToInt32(priceMin))&& a.Price < (Convert.ToInt32(priceMax))).ToList();
+    }
+
+    public void ResetPrice()
+    {
+        Reset(false);
+        priceMin = "";
+        priceMax = "";
+    }
+
+    public void ResetKeyWord()
+    {
+        Reset(false);
+        keyWord = "";
+
+    }
+
+    void Reset(bool all)
+    {
+        if (all)
+        {
+            keyWord = "";
+            priceMin = "";
+            priceMax = "";
+        }
+        hubConnection.SendAsync("SendMessage", null);
+    }
+
+}
